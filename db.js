@@ -99,6 +99,15 @@ async function _sbPush() {
   } catch (_) {}
 }
 
+async function _clearStore(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, 'readwrite').objectStore(store).clear();
+    req.onsuccess = resolve;
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function _sbPull() {
   const { url, key } = _sbConfig();
   if (!url || !key) return false;
@@ -111,6 +120,10 @@ async function _sbPull() {
     const rows = await res.json();
     if (!rows || !rows.length) return false;
     const row = rows[0];
+    // Clear generated content stores so stale items don't survive the pull
+    for (const store of ['topics', 'subtopics', 'questions']) {
+      await _clearStore(store);
+    }
     for (const store of STORES) {
       for (const item of (row[store] || [])) {
         await _rawPut(store, item);
