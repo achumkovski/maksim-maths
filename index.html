@@ -4,7 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Maksim's Maths</title>
-  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Force fresh JS load when app version changes, bypassing Chrome cache
+    var APP_V = '6';
+    if (localStorage.getItem('mm-code-v') !== APP_V) {
+      localStorage.setItem('mm-code-v', APP_V);
+      var u = new URL(location.href);
+      u.searchParams.set('_v', APP_V);
+      location.replace(u.toString());
+    }
+  </script>
+  <link rel="stylesheet" href="styles.css?v=6" />
 </head>
 <body>
   <div id="app">
