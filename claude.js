@@ -210,9 +210,9 @@ Return ONLY this JSON structure (no other text):
 }
 
 Requirements per tier:
-- foundational: 8 questions, Stage 5.1, ~15 minutes total. Direct application, single-step or simple multi-step.
-- medium: 6 questions, Stage 5.2, ~15 minutes total. Multi-step, requires connecting ideas.
-- advanced: 5 questions, Stage 5.3, ~15 minutes total. Complex reasoning, proof-based or abstract.
+- foundational: 5 questions, Stage 5.1, ~10 minutes total. Direct application, single-step or simple multi-step.
+- medium: 4 questions, Stage 5.2, ~10 minutes total. Multi-step, requires connecting ideas.
+- advanced: 3 questions, Stage 5.3, ~10 minutes total. Complex reasoning, proof-based or abstract.
 
 Each question MUST have:
 - A clear, unambiguous question text

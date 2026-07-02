@@ -776,7 +776,7 @@ async function renderSubtopic(subtopicId) {
         </button>`;
 
     const label = { foundational: '🟢 Foundational', medium: '🟡 Medium', advanced: '🔴 Advanced' }[diff];
-    const hint = { foundational: 'Stage 5.1 · ~15 min', medium: 'Stage 5.2 · ~15 min', advanced: 'Stage 5.3 · ~15 min' }[diff];
+    const hint = { foundational: 'Stage 5.1 · ~10 min', medium: 'Stage 5.2 · ~10 min', advanced: 'Stage 5.3 · ~10 min' }[diff];
 
     return `
       <div class="section-block">
