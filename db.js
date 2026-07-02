@@ -185,15 +185,18 @@ async function _autoConfigSupabase() {
 async function dbInit() {
   await openDB();
   await _autoConfigSupabase();
-  const topics = await _rawGetAll('topics');
-  if (topics.length === 0) {
-    if (_sbEnabled()) {
-      await _sbPull();
-    } else {
-      await _localPull();
-    }
-  } else {
+  if (_sbEnabled()) {
+    // Always pull from Supabase on startup so cloud is source of truth.
+    // Then push to sync any local-only data (e.g. submissions) back up.
+    await _sbPull();
     _schedulePush();
+  } else {
+    const topics = await _rawGetAll('topics');
+    if (topics.length === 0) {
+      await _localPull();
+    } else {
+      _schedulePush();
+    }
   }
 }
 
