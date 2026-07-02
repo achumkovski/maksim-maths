@@ -577,8 +577,14 @@ async function renderSubtopic(subtopicId) {
   const allQuestions = await DB.list('questions', 'subtopicId', subtopicId);
   const submissions = await DB.list('submissions', 'subtopicId', subtopicId);
 
-  const submissionByDiff = {};
+  // Clean up any stuck submissions (null feedback = analysis failed or page was reloaded mid-analysis)
   for (const s of submissions) {
+    if (!s.feedback) await DB.del('submissions', s.id);
+  }
+  const cleanSubmissions = submissions.filter(s => s.feedback);
+
+  const submissionByDiff = {};
+  for (const s of cleanSubmissions) {
     if (!submissionByDiff[s.difficulty] || s.uploadedAt > submissionByDiff[s.difficulty].uploadedAt) {
       submissionByDiff[s.difficulty] = s;
     }
@@ -743,6 +749,8 @@ async function submitWork(subtopicId, subtopicName, difficulty, file, questions)
 
     renderFeedback(submissionId, subtopicId);
   } catch (err) {
+    // Remove the failed submission so the upload area reappears (no permanent "Analysing..." state)
+    await DB.del('submissions', submissionId);
     renderSubtopic(subtopicId);
     setTimeout(() => showError(getView(), `Analysis failed: ${err.message}`), 100);
   }
