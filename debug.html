@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Debug</title>
+  <style>
+    body { font-family: monospace; padding: 20px; font-size: 14px; background: #f5f5f5; }
+    .ok { color: green; } .err { color: red; } .warn { color: orange; }
+    pre { background: #fff; padding: 10px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+    button { margin: 8px 4px; padding: 10px 16px; font-size: 14px; border-radius: 6px;
+             border: none; background: #4f46e5; color: white; cursor: pointer; }
+  </style>
+</head>
+<body>
+<h2>Maksim Maths — Phone Debug</h2>
+<div id="out"></div>
+<button onclick="runDiag()">Run Diagnostics</button>
+<button onclick="nukeAndSync()">Nuke DB + Force Sync</button>
+<script>
+function log(msg, cls) {
+  var el = document.createElement('pre');
+  if (cls) el.className = cls;
+  el.textContent = msg;
+  document.getElementById('out').appendChild(el);
+}
+
+function runDiag() {
+  document.getElementById('out').innerHTML = '';
+
+  // 1. LocalStorage state
+  var sbUrl = localStorage.getItem('mm-supabase-url') || '(not set)';
+  var sbKey = localStorage.getItem('mm-supabase-key') || '(not set)';
+  var gwUrl = localStorage.getItem('mm-gateway-url') || '(not set)';
+  var apiKey = localStorage.getItem('mm-api-key') || '(not set)';
+  var codeV = localStorage.getItem('mm-code-v') || '(not set)';
+  log('Code version in localStorage: ' + codeV, codeV === '6' ? 'ok' : 'err');
+  log('Gateway URL: ' + gwUrl, gwUrl !== '(not set)' ? 'ok' : 'warn');
+  log('Supabase URL: ' + sbUrl, sbUrl !== '(not set)' ? 'ok' : 'err');
+  log('Supabase Key: ' + (sbKey !== '(not set)' ? sbKey.slice(0,20) + '…' : '(not set)'), sbKey !== '(not set)' ? 'ok' : 'err');
+
+  // 2. Check /api/config
+  log('Fetching /api/config…');
+  fetch('/api/config').then(function(r) { return r.json(); }).then(function(d) {
+    log('  supabaseUrl: ' + (d.supabaseUrl || '(empty)'), d.supabaseUrl ? 'ok' : 'err');
+    log('  supabaseKey: ' + (d.supabaseKey ? d.supabaseKey.slice(0,20) + '…' : '(empty)'), d.supabaseKey ? 'ok' : 'err');
+  }).catch(function(e) { log('  /api/config error: ' + e, 'err'); });
+
+  // 3. IndexedDB question count
+  log('Opening IndexedDB…');
+  var req = indexedDB.open('maksim-maths-db');
+  req.onsuccess = function(e) {
+    var db = e.target.result;
+    var tx = db.transaction(['questions','subtopics','topics'], 'readonly');
+    tx.objectStore('questions').getAll().onsuccess = function(ev) {
+      var qs = ev.target.result;
+      var f = qs.filter(function(q){return q.difficulty==='foundational';}).length;
+      var m = qs.filter(function(q){return q.difficulty==='medium';}).length;
+      var a = qs.filter(function(q){return q.difficulty==='advanced';}).length;
+      log('Questions in DB: ' + qs.length + ' (F:' + f + ' M:' + m + ' A:' + a + ')',
+          qs.length === 156 ? 'ok' : 'err');
+    };
+    tx.objectStore('subtopics').getAll().onsuccess = function(ev) {
+      log('Subtopics in DB: ' + ev.target.result.length, ev.target.result.length === 13 ? 'ok' : 'warn');
+    };
+    tx.objectStore('topics').getAll().onsuccess = function(ev) {
+      log('Topics in DB: ' + ev.target.result.length, ev.target.result.length > 0 ? 'ok' : 'warn');
+    };
+  };
+  req.onerror = function() { log('IndexedDB open error: ' + req.error, 'err'); };
+
+  // 4. Supabase direct fetch
+  var url = (localStorage.getItem('mm-supabase-url') || '').replace(/\/$/, '');
+  var key = localStorage.getItem('mm-supabase-key') || '';
+  if (url && key) {
+    log('Fetching from Supabase…');
+    fetch(url + '/rest/v1/sync_data?id=eq.main&select=questions', {
+      headers: { 'apikey': key, 'Authorization': 'Bearer ' + key }
+    }).then(function(r) { return r.json(); }).then(function(rows) {
+      if (!rows || !rows.length) { log('  Supabase: no rows found', 'err'); return; }
+      var qs = rows[0].questions || [];
+      log('  Supabase questions count: ' + qs.length, qs.length === 156 ? 'ok' : 'err');
+    }).catch(function(e) { log('  Supabase fetch error: ' + e, 'err'); });
+  } else {
+    log('Supabase not configured — skipping Supabase check', 'warn');
+  }
+}
+
+function nukeAndSync() {
+  document.getElementById('out').innerHTML = '';
+  log('Deleting IndexedDB…');
+  var req = indexedDB.deleteDatabase('maksim-maths-db');
+  req.onsuccess = function() {
+    log('IndexedDB deleted.', 'ok');
+    log('Removing Supabase credentials so they re-fetch from Vercel…');
+    localStorage.removeItem('mm-supabase-url');
+    localStorage.removeItem('mm-supabase-key');
+    log('Redirecting to app in 2 seconds…', 'ok');
+    setTimeout(function() { window.location.replace('/'); }, 2000);
+  };
+  req.onerror = function() { log('Delete failed: ' + req.error, 'err'); };
+  req.onblocked = function() { log('DB blocked — close other tabs then retry', 'warn'); };
+}
+</script>
+</body>
+</html>
