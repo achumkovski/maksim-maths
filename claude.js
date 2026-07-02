@@ -1,0 +1,211 @@
+const DIRECT_API_URL = 'https://api.anthropic.com/v1/messages';
+const DIRECT_MODEL = 'claude-sonnet-4-6';
+
+const BEDROCK_PROXY_URL = 'http://localhost:8770';
+const BEDROCK_MODEL_ID = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0';
+
+function getAuthMode() {
+  return localStorage.getItem('mm-auth-mode') || 'direct';
+}
+
+async function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function extractJSON(text) {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON found in Claude response');
+  return JSON.parse(match[0]);
+}
+
+async function callClaude(token, messages, systemPrompt) {
+  if (getAuthMode() === 'bedrock') {
+    return callBedrockClaude(token, messages, systemPrompt);
+  }
+  return callDirectClaude(token, messages, systemPrompt);
+}
+
+async function callDirectClaude(apiKey, messages, systemPrompt) {
+  const res = await fetch(DIRECT_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-calls': 'true',
+    },
+    body: JSON.stringify({
+      model: DIRECT_MODEL,
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Claude API error ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+async function callBedrockClaude(_token, messages, systemPrompt) {
+  const url = `${BEDROCK_PROXY_URL}/v1/messages`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: DIRECT_MODEL,
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || `Proxy error ${res.status} — is the maksim-maths-proxy server running?`);
+  }
+
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+async function generateQuestions(topicName, subtopicName, apiKey) {
+  const system = `You are a NSW Stage 5 Mathematics curriculum expert creating practice questions for a Year 10 student in New South Wales, Australia.
+
+${window.CURRICULUM_CONTEXT}
+
+CRITICAL: Return ONLY valid JSON with no markdown fences, no explanation, no extra text. The entire response must be parseable by JSON.parse().`;
+
+  const user = `Create practice questions for a Year 10 NSW student:
+
+Topic: ${topicName}
+Subtopic: ${subtopicName}
+
+Return ONLY this JSON structure (no other text):
+{
+  "foundational": [
+    {
+      "text": "Full question text",
+      "answer": "Final answer (e.g. x = 3, or 12.5 cm²)",
+      "workingSteps": ["Step 1: Write the equation...", "Step 2: Collect like terms...", "Step 3: Divide both sides..."]
+    }
+  ],
+  "medium": [...],
+  "advanced": [...]
+}
+
+Requirements per tier:
+- foundational: 8 questions, Stage 5.1, ~15 minutes total. Direct application, single-step or simple multi-step.
+- medium: 6 questions, Stage 5.2, ~15 minutes total. Multi-step, requires connecting ideas.
+- advanced: 5 questions, Stage 5.3, ~15 minutes total. Complex reasoning, proof-based or abstract.
+
+Each question MUST have:
+- A clear, unambiguous question text
+- A precise final answer
+- At least 4 detailed working steps showing the full method
+
+Notation: use ^ for powers (x^2), sqrt() for roots, unicode symbols ≤ ≥ ≠ π directly. Write fractions as (a/b).`;
+
+  const text = await callClaude(apiKey, [{ role: 'user', content: user }], system);
+  return extractJSON(text);
+}
+
+async function analysePhoto(photoFile, questions, difficulty, subtopicName, apiKey) {
+  const base64 = await blobToBase64(photoFile);
+  const mediaType = photoFile.type || 'image/jpeg';
+
+  const questionList = questions.map((q, i) => `Q${i + 1}: ${q.text}`).join('\n');
+
+  const system = `You are a supportive mathematics teacher reviewing a Year 10 NSW student's handwritten work.
+Your goal is to identify both what they did well and where they went wrong, focusing on METHOD and LOGIC, not just answers.
+CRITICAL: Return ONLY valid JSON. No markdown, no explanation, no extra text.`;
+
+  const userContent = [
+    {
+      type: 'image',
+      source: { type: 'base64', media_type: mediaType, data: base64 },
+    },
+    {
+      type: 'text',
+      text: `This is a Year 10 NSW student's handwritten work for the "${subtopicName}" subtopic — ${difficulty} difficulty section.
+
+Questions in this section:
+${questionList}
+
+Carefully examine the handwritten work in the image. Identify which questions the student has attempted.
+
+Return ONLY this JSON (no other text):
+{
+  "questions": [
+    {
+      "questionIndex": 1,
+      "visible": true,
+      "correct": false,
+      "logicCorrect": false,
+      "studentError": "Specific description of what the student did wrong, or null if correct"
+    }
+  ],
+  "score": 72,
+  "strengths": ["Specific strength observed, e.g. 'Correctly set up equations before solving'"],
+  "improvements": ["Specific area to work on, e.g. 'Check signs when moving terms across the equals sign'"]
+}
+
+Rules:
+- questionIndex is 1-based, matching Q1, Q2, etc. above
+- visible: false if you cannot see any attempt for that question
+- correct: true if the final answer is correct
+- logicCorrect: true if the method/approach is correct even if a minor arithmetic slip occurred
+- studentError: describe the actual mistake made (null if correct)
+- score: 0–100 based on proportion of correct answers, weighted by working quality
+- strengths and improvements: 2–4 items each, specific and actionable for a Year 10 student`,
+    },
+  ];
+
+  const text = await callClaude(apiKey, [{ role: 'user', content: userContent }], system);
+  return extractJSON(text);
+}
+
+async function extractTopicFromImage(imageFile, apiKey) {
+  const base64 = await blobToBase64(imageFile);
+  const mediaType = imageFile.type || 'image/jpeg';
+  const isPdf = mediaType === 'application/pdf';
+
+  const system = `You are extracting curriculum structure from a maths textbook, syllabus, or curriculum document for a Year 10 NSW Australia student.
+Return ONLY valid JSON. No markdown, no explanation.`;
+
+  const fileBlock = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+    : { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } };
+
+  const content = [
+    fileBlock,
+    { type: 'text', text: `Extract the main topic name and every subtopic visible in this image.
+
+Return ONLY this JSON (no other text):
+{
+  "topic": "Main topic name as it appears",
+  "subtopics": ["Subtopic 1", "Subtopic 2", "Subtopic 3"]
+}
+
+Rules:
+- topic: the overarching chapter or unit name
+- subtopics: every individual sub-section, lesson, or subtopic listed — include all of them
+- Use the exact wording from the image where possible
+- If no clear topic/subtopic structure is visible, return your best interpretation` },
+  ];
+
+  const text = await callClaude(apiKey, [{ role: 'user', content }], system);
+  return extractJSON(text);
+}
+
+window.CLAUDE = { generateQuestions, analysePhoto, extractTopicFromImage };

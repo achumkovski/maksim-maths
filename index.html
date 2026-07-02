@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maksim's Maths</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="topbar" id="topbar">
+      <div class="topbar-logo">📐 Maksim's Maths</div>
+      <div class="topbar-right">
+        <span id="topbar-subtitle" class="text-muted text-sm"></span>
+        <button class="btn btn-ghost btn-sm" id="change-key-btn" title="Change API key">🔑</button>
+      </div>
+    </div>
+
+    <div id="view-container"></div>
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay"></div>
+
+  <script src="curriculum.js"></script>
+  <script src="db.js"></script>
+  <script src="claude.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
