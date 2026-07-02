@@ -29,10 +29,33 @@ function extractJSON(text) {
 }
 
 async function callClaude(token, messages, systemPrompt) {
+  // On Vercel (HTTPS but not GitHub Pages), use the serverless function — no client API key needed.
+  if (window.location.protocol === 'https:' && !window.location.hostname.includes('github.io')) {
+    return callVercelClaude(messages, systemPrompt);
+  }
   if (getAuthMode() === 'bedrock') {
     return callBedrockClaude(token, messages, systemPrompt);
   }
   return callDirectClaude(token, messages, systemPrompt);
+}
+
+async function callVercelClaude(messages, systemPrompt) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: DIRECT_MODEL,
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.error || `Claude API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
 }
 
 async function callDirectClaude(apiKey, messages, systemPrompt) {
