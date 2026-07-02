@@ -45,9 +45,11 @@ function hideModal() {
   getModal().innerHTML = '';
 }
 
+const APP_VERSION = 'v6';
+
 // ── Topbar API key button ──────────────────────────────────────────────
 function renderTopbar(subtitle) {
-  document.getElementById('topbar-subtitle').textContent = subtitle || '';
+  document.getElementById('topbar-subtitle').textContent = (subtitle || '') + ' · ' + APP_VERSION;
 }
 
 // ── Loading view ───────────────────────────────────────────────────────
