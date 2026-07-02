@@ -462,31 +462,164 @@ async function renderTopic(topicId) {
 async function showAddSubtopicModal(topicId, topicName) {
   showModal(`
     <div class="modal-title">Add Subtopic</div>
-    <div class="modal-sub">Claude will generate 45 minutes of questions across three difficulty levels for this subtopic in <strong>${fmt(topicName)}</strong>.</div>
-    <div id="modal-error"></div>
-    <div class="form-group">
-      <label class="form-label">Subtopic Name</label>
-      <input class="form-input" type="text" id="new-subtopic-name" placeholder="e.g. Solving Linear Equations" autofocus />
-      <div class="form-hint">Be specific — the more precise, the better the questions</div>
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      <button class="btn mode-tab active-tab" id="tab-manual" style="flex:1">✏️ Type manually</button>
+      <button class="btn mode-tab" id="tab-image" style="flex:1">📎 Upload file</button>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
-      <button class="btn btn-primary" id="modal-confirm">Generate Questions</button>
+    <div id="modal-error"></div>
+
+    <div id="panel-manual">
+      <div class="modal-sub" style="margin-bottom:16px">Claude will generate 45 minutes of questions for this subtopic in <strong>${fmt(topicName)}</strong>.</div>
+      <div class="form-group">
+        <label class="form-label">Subtopic Name</label>
+        <input class="form-input" type="text" id="new-subtopic-name" placeholder="e.g. Solving Linear Equations" autofocus />
+        <div class="form-hint">Be specific — the more precise, the better the questions</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modal-cancel-m">Cancel</button>
+        <button class="btn btn-primary" id="modal-confirm-manual">Generate Questions</button>
+      </div>
+    </div>
+
+    <div id="panel-image" style="display:none">
+      <div id="scan-step">
+        <div class="modal-sub" style="margin-bottom:16px">Upload a textbook page or syllabus to extract multiple subtopics at once for <strong>${fmt(topicName)}</strong>.</div>
+        <div class="upload-area" id="image-drop-zone" style="cursor:pointer;margin-bottom:16px">
+          <div class="upload-icon">🖼️</div>
+          <div class="upload-text">Click or drag a file here</div>
+          <div class="upload-hint">Accepts images (PNG, JPG) or PDF — Claude will extract all visible subtopics</div>
+          <input type="file" id="subtopic-image-input" accept="image/*,.pdf,application/pdf" style="display:none" />
+        </div>
+        <div id="selected-file-name" style="font-size:0.85rem;color:var(--muted);text-align:center;margin-bottom:16px;min-height:20px"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel-i">Cancel</button>
+          <button class="btn btn-primary" id="scan-btn" disabled>Scan File</button>
+        </div>
+      </div>
+
+      <div id="confirm-step" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Subtopics to add <span id="subtopic-count" style="color:var(--muted);font-weight:400"></span></label>
+          <div id="subtopic-list" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding-right:4px"></div>
+          <button class="btn btn-ghost btn-sm" id="add-row-btn" style="margin-top:8px;width:100%">+ Add subtopic</button>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel-c">Cancel</button>
+          <button class="btn btn-primary" id="modal-confirm-all">Generate All Questions →</button>
+        </div>
+      </div>
     </div>`);
 
-  document.getElementById('modal-cancel').onclick = hideModal;
-  document.getElementById('modal-confirm').onclick = async () => {
+  // Tab switching
+  const tabManual = document.getElementById('tab-manual');
+  const tabImage = document.getElementById('tab-image');
+  const panelManual = document.getElementById('panel-manual');
+  const panelImage = document.getElementById('panel-image');
+
+  function setTab(mode) {
+    const isManual = mode === 'manual';
+    tabManual.className = 'btn mode-tab' + (isManual ? ' active-tab' : '');
+    tabImage.className = 'btn mode-tab' + (!isManual ? ' active-tab' : '');
+    panelManual.style.display = isManual ? 'block' : 'none';
+    panelImage.style.display = isManual ? 'none' : 'block';
+  }
+  tabManual.onclick = () => setTab('manual');
+  tabImage.onclick = () => setTab('image');
+
+  // Manual mode
+  document.getElementById('modal-cancel-m').onclick = hideModal;
+  document.getElementById('modal-confirm-manual').onclick = async () => {
     const name = document.getElementById('new-subtopic-name').value.trim();
     if (!name) { document.getElementById('modal-error').innerHTML = '<div class="alert alert-error">Please enter a subtopic name</div>'; return; }
-
     const topic = await DB.get('topics', topicId);
     hideModal();
     await generateSubtopicQuestions(topicId, topic.name, name);
   };
-
   document.getElementById('new-subtopic-name').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('modal-confirm').click();
+    if (e.key === 'Enter') document.getElementById('modal-confirm-manual').click();
   });
+
+  // Image mode — file selection
+  let selectedFile = null;
+  const dropZone = document.getElementById('image-drop-zone');
+  const fileInput = document.getElementById('subtopic-image-input');
+  const scanBtn = document.getElementById('scan-btn');
+
+  dropZone.onclick = () => fileInput.click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; };
+  dropZone.ondragleave = () => { dropZone.style.borderColor = ''; };
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '';
+    const f = e.dataTransfer.files[0];
+    if (f && (f.type.startsWith('image/') || f.type === 'application/pdf')) setFile(f);
+  };
+  fileInput.onchange = () => { if (fileInput.files[0]) setFile(fileInput.files[0]); };
+
+  function setFile(f) {
+    selectedFile = f;
+    document.getElementById('selected-file-name').textContent = f.name;
+    scanBtn.disabled = false;
+  }
+
+  document.getElementById('modal-cancel-i').onclick = hideModal;
+
+  scanBtn.onclick = async () => {
+    if (!selectedFile) return;
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Scanning…';
+    document.getElementById('modal-error').innerHTML = '';
+    try {
+      const result = await CLAUDE.extractTopicFromImage(selectedFile, getApiKey());
+      showConfirmStep(result.subtopics || []);
+    } catch (err) {
+      scanBtn.disabled = false;
+      scanBtn.textContent = 'Scan File';
+      document.getElementById('modal-error').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+    }
+  };
+
+  function showConfirmStep(subtopics) {
+    document.getElementById('scan-step').style.display = 'none';
+    document.getElementById('confirm-step').style.display = 'block';
+    renderSubtopicRows(subtopics);
+  }
+
+  function renderSubtopicRows(subtopics) {
+    const list = document.getElementById('subtopic-list');
+    list.innerHTML = subtopics.map((s, i) => `
+      <div class="subtopic-edit-row" data-index="${i}" style="display:flex;gap:8px;align-items:center">
+        <span style="color:var(--muted);font-size:0.82rem;min-width:20px">${i + 1}.</span>
+        <input class="form-input subtopic-row-input" style="flex:1;margin-bottom:0" value="${fmt(s)}" />
+        <button class="btn btn-ghost btn-sm del-row" data-index="${i}" style="padding:4px 8px;color:var(--danger)">✕</button>
+      </div>`).join('');
+    document.getElementById('subtopic-count').textContent = `(${subtopics.length})`;
+    list.querySelectorAll('.del-row').forEach(btn => {
+      btn.onclick = () => {
+        const rows = [...list.querySelectorAll('.subtopic-row-input')].map(i => i.value);
+        rows.splice(parseInt(btn.dataset.index), 1);
+        renderSubtopicRows(rows);
+      };
+    });
+  }
+
+  document.getElementById('add-row-btn').onclick = () => {
+    const list = document.getElementById('subtopic-list');
+    const rows = [...list.querySelectorAll('.subtopic-row-input')].map(i => i.value);
+    rows.push('');
+    renderSubtopicRows(rows);
+    list.querySelectorAll('.subtopic-row-input')[rows.length - 1]?.focus();
+  };
+
+  document.getElementById('modal-cancel-c').onclick = hideModal;
+
+  document.getElementById('modal-confirm-all').onclick = async () => {
+    const subtopicNames = [...document.getElementById('subtopic-list').querySelectorAll('.subtopic-row-input')]
+      .map(i => i.value.trim()).filter(Boolean);
+    if (!subtopicNames.length) { document.getElementById('modal-error').innerHTML = '<div class="alert alert-error">Add at least one subtopic</div>'; return; }
+    hideModal();
+    await generateAllSubtopics(topicId, topicName, subtopicNames);
+  };
 }
 
 async function generateSubtopicQuestions(topicId, topicName, subtopicName) {
