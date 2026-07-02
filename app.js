@@ -93,9 +93,20 @@ function renderSetup() {
         </div>
 
         <div id="setup-corporate">
-          <div class="alert alert-info" style="margin-bottom:16px;font-size:0.88rem;line-height:1.6;flex-direction:column;gap:0">
-            <div>Uses Salesforce's internal model gateway — no personal billing needed.</div>
-            <div style="margin-top:8px">Start the <strong>maksim-maths-proxy</strong> server in Claude Code first (it handles auth automatically), then click Start Studying.</div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label" style="font-size:0.82rem">Gateway URL</label>
+            <input class="form-input" type="text" id="setup-gw-url" placeholder="https://eng-ai-model-gateway..."
+              value="${localStorage.getItem('mm-gateway-url') || ''}" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label" style="font-size:0.82rem">Auth Token</label>
+            <input class="form-input" type="password" id="setup-gw-token" placeholder="sk-..."
+              value="${localStorage.getItem('mm-gateway-token') || ''}" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:0.82rem">Custom Headers <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input class="form-input" type="text" id="setup-gw-custom" placeholder="x-client-name: claudecowork"
+              value="${localStorage.getItem('mm-gateway-custom-headers') || ''}" autocomplete="off" />
           </div>
         </div>
 
@@ -132,6 +143,17 @@ function renderSetup() {
     const isCorporate = document.getElementById('setup-corporate').style.display !== 'none';
 
     if (isCorporate) {
+      const gwUrl = document.getElementById('setup-gw-url').value.trim();
+      const gwToken = document.getElementById('setup-gw-token').value.trim();
+      const gwCustom = document.getElementById('setup-gw-custom').value.trim();
+      if (!gwUrl || !gwToken) {
+        document.getElementById('setup-error').innerHTML =
+          '<div class="alert alert-error">Please enter the Gateway URL and Auth Token</div>';
+        return;
+      }
+      localStorage.setItem('mm-gateway-url', gwUrl);
+      localStorage.setItem('mm-gateway-token', gwToken);
+      if (gwCustom) localStorage.setItem('mm-gateway-custom-headers', gwCustom);
       localStorage.setItem('mm-auth-mode', 'bedrock');
       setApiKey('proxy');
       renderDashboard();
