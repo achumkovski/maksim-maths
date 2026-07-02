@@ -45,9 +45,49 @@ function extractJSON(text) {
   return JSON.parse(match[0]);
 }
 
+function _gatewayConfig() {
+  return {
+    url: (localStorage.getItem('mm-gateway-url') || '').replace(/\/$/, ''),
+    token: localStorage.getItem('mm-gateway-token') || '',
+    customHeaders: localStorage.getItem('mm-gateway-custom-headers') || '',
+  };
+}
+
+function _gatewayEnabled() {
+  const { url, token } = _gatewayConfig();
+  return !!(url && token);
+}
+
+async function callGatewayClaude(messages, systemPrompt) {
+  const { url, token, customHeaders } = _gatewayConfig();
+  const headers = {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'Authorization': `Bearer ${token}`,
+  };
+  for (const line of customHeaders.split('\n')) {
+    if (line.includes(':')) {
+      const [k, ...rest] = line.split(':');
+      headers[k.trim()] = rest.join(':').trim();
+    }
+  }
+  const res = await fetch(`${url}/v1/messages`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ model: DIRECT_MODEL, max_tokens: 8192, system: systemPrompt, messages }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Gateway error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
 async function callClaude(token, messages, systemPrompt) {
-  // On Vercel (HTTPS but not GitHub Pages), use the serverless function — no client API key needed.
+  // On HTTPS (Vercel): prefer direct gateway if credentials stored, else try serverless function.
   if (window.location.protocol === 'https:' && !window.location.hostname.includes('github.io')) {
+    if (_gatewayEnabled()) return callGatewayClaude(messages, systemPrompt);
     return callVercelClaude(messages, systemPrompt);
   }
   if (getAuthMode() === 'bedrock') {

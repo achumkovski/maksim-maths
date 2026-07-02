@@ -1029,8 +1029,20 @@ async function init() {
           style="flex:1;${!isCorporate ? 'border:2px solid var(--primary)' : ''}">🔑 Anthropic Key</button>
       </div>
       <div id="m-corp-section" style="display:${isCorporate ? 'block' : 'none'}">
-        <div class="alert alert-info" style="font-size:0.82rem;margin-bottom:0;flex-direction:column;gap:0">
-          Uses the local proxy — just make sure <strong>maksim-maths-proxy</strong> is running in Claude Code.
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label" style="font-size:0.82rem">Gateway URL</label>
+          <input class="form-input" type="text" id="m-gw-url" placeholder="https://eng-ai-model-gateway..."
+            value="${localStorage.getItem('mm-gateway-url') || ''}" autocomplete="off" />
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label" style="font-size:0.82rem">Auth Token</label>
+          <input class="form-input" type="password" id="m-gw-token" placeholder="sk-..."
+            value="${localStorage.getItem('mm-gateway-token') || ''}" autocomplete="off" />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="font-size:0.82rem">Custom Headers <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input class="form-input" type="text" id="m-gw-custom" placeholder="x-client-name: claudecowork"
+            value="${localStorage.getItem('mm-gateway-custom-headers') || ''}" autocomplete="off" />
         </div>
       </div>
       <div id="m-direct-section" style="display:${!isCorporate ? 'block' : 'none'}">
@@ -1083,6 +1095,12 @@ async function init() {
       else localStorage.removeItem('mm-supabase-key');
 
       if (corpVisible) {
+        const gwUrl = document.getElementById('m-gw-url').value.trim();
+        const gwToken = document.getElementById('m-gw-token').value.trim();
+        const gwCustom = document.getElementById('m-gw-custom').value.trim();
+        if (gwUrl) localStorage.setItem('mm-gateway-url', gwUrl); else localStorage.removeItem('mm-gateway-url');
+        if (gwToken) localStorage.setItem('mm-gateway-token', gwToken); else localStorage.removeItem('mm-gateway-token');
+        if (gwCustom) localStorage.setItem('mm-gateway-custom-headers', gwCustom); else localStorage.removeItem('mm-gateway-custom-headers');
         localStorage.setItem('mm-auth-mode', 'bedrock');
         setApiKey('proxy');
         hideModal();
