@@ -169,8 +169,22 @@ function _schedulePush() {
 
 // ── Init (called once on app startup) ───────────────────────────────────
 
+async function _autoConfigSupabase() {
+  if (_sbEnabled()) return;
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const { supabaseUrl, supabaseKey } = await res.json();
+    if (supabaseUrl && supabaseKey) {
+      localStorage.setItem('mm-supabase-url', supabaseUrl);
+      localStorage.setItem('mm-supabase-key', supabaseKey);
+    }
+  } catch (_) {}
+}
+
 async function dbInit() {
   await openDB();
+  await _autoConfigSupabase();
   const topics = await _rawGetAll('topics');
   if (topics.length === 0) {
     if (_sbEnabled()) {
