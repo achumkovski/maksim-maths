@@ -240,4 +240,19 @@ async function dbDel(store, id) {
   _schedulePush();
 }
 
-window.DB = { save: dbSave, get: dbGet, list: dbList, del: dbDel, init: dbInit, sbEnabled: _sbEnabled };
+async function dbForcePull() {
+  for (const store of STORES) {
+    const items = await _rawGetAll(store);
+    for (const item of items) {
+      const db = await openDB();
+      await new Promise((resolve, reject) => {
+        const req = db.transaction(store, 'readwrite').objectStore(store).delete(item.id);
+        req.onsuccess = resolve;
+        req.onerror = () => reject(req.error);
+      });
+    }
+  }
+  return _sbPull();
+}
+
+window.DB = { save: dbSave, get: dbGet, list: dbList, del: dbDel, init: dbInit, sbEnabled: _sbEnabled, forcePull: dbForcePull };

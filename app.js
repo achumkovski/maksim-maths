@@ -451,7 +451,7 @@ async function renderTopic(topicId) {
     : `<div class="empty-state">
         <div class="empty-icon">📝</div>
         <div class="empty-title">No subtopics yet</div>
-        <div class="empty-sub">Add a subtopic — Claude will generate 45 minutes of questions for it</div>
+        <div class="empty-sub">Add a subtopic — Claude will generate 30 minutes of questions for it</div>
       </div>`;
 
   renderTopbar(topic.name);
@@ -491,7 +491,7 @@ async function showAddSubtopicModal(topicId, topicName) {
     <div id="modal-error"></div>
 
     <div id="panel-manual">
-      <div class="modal-sub" style="margin-bottom:16px">Claude will generate 45 minutes of questions for this subtopic in <strong>${fmt(topicName)}</strong>.</div>
+      <div class="modal-sub" style="margin-bottom:16px">Claude will generate 30 minutes of questions for this subtopic in <strong>${fmt(topicName)}</strong>.</div>
       <div class="form-group">
         <label class="form-label">Subtopic Name</label>
         <input class="form-input" type="text" id="new-subtopic-name" placeholder="e.g. Solving Linear Equations" autofocus />
@@ -647,7 +647,7 @@ async function showAddSubtopicModal(topicId, topicName) {
 async function generateSubtopicQuestions(topicId, topicName, subtopicName) {
   showLoading(
     `Generating questions for "${subtopicName}"`,
-    'Claude is writing 45 minutes of curriculum-aligned questions across three difficulty levels. This usually takes 15–30 seconds…'
+    'Claude is writing 30 minutes of curriculum-aligned questions across three difficulty levels. This usually takes 15–30 seconds…'
   );
 
   const apiKey = getApiKey();
@@ -690,7 +690,7 @@ async function generateAllSubtopics(topicId, topicName, subtopicNames) {
     const name = subtopicNames[i];
     showLoading(
       `Generating "${name}"`,
-      `Subtopic ${i + 1} of ${subtopicNames.length} — Claude is writing 45 minutes of curriculum-aligned questions. This takes 15–30 seconds per subtopic…`
+      `Subtopic ${i + 1} of ${subtopicNames.length} — Claude is writing 30 minutes of curriculum-aligned questions. This takes 15–30 seconds per subtopic…`
     );
 
     const apiKey = getApiKey();
@@ -1169,6 +1169,23 @@ async function init() {
   document.getElementById('modal-overlay').addEventListener('click', (e) => {
     if (e.target === getModal()) hideModal();
   });
+
+  // Show cloud sync button only when Supabase is configured
+  const syncBtn = document.getElementById('sync-cloud-btn');
+  if (DB.sbEnabled()) syncBtn.style.display = '';
+  syncBtn.onclick = async () => {
+    if (!DB.sbEnabled()) return;
+    syncBtn.disabled = true;
+    syncBtn.textContent = '⏳';
+    const ok = await DB.forcePull();
+    syncBtn.disabled = false;
+    syncBtn.textContent = '☁️';
+    if (ok) {
+      renderDashboard();
+    } else {
+      alert('Could not sync from cloud. Check your connection.');
+    }
+  };
 
   // Topbar API key / token change
   document.getElementById('change-key-btn').onclick = () => {
