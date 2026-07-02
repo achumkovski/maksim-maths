@@ -225,10 +225,13 @@ Notation: use ^ for powers (x^2), sqrt() for roots, unicode symbols ≤ ≥ ≠ 
   return extractJSON(text);
 }
 
-async function analysePhoto(photoFile, questions, difficulty, subtopicName, apiKey) {
-  const resized = await resizeImage(photoFile);
-  const base64 = await blobToBase64(resized);
-  const mediaType = 'image/jpeg';
+async function analysePhoto(photoFiles, questions, difficulty, subtopicName, apiKey) {
+  const fileArr = Array.isArray(photoFiles) ? photoFiles : [photoFiles];
+  const imageBlocks = await Promise.all(fileArr.map(async (f) => {
+    const resized = await resizeImage(f);
+    const base64 = await blobToBase64(resized);
+    return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } };
+  }));
 
   const questionList = questions.map((q, i) => `Q${i + 1}: ${q.text}`).join('\n');
 
@@ -237,10 +240,7 @@ Your goal is to identify both what they did well and where they went wrong, focu
 CRITICAL: Return ONLY valid JSON. No markdown, no explanation, no extra text.`;
 
   const userContent = [
-    {
-      type: 'image',
-      source: { type: 'base64', media_type: mediaType, data: base64 },
-    },
+    ...imageBlocks,
     {
       type: 'text',
       text: `This is a Year 10 NSW student's handwritten work for the "${subtopicName}" subtopic — ${difficulty} difficulty section.
@@ -248,7 +248,7 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanation, no extra text.`;
 Questions in this section:
 ${questionList}
 
-Carefully examine the handwritten work in the image. Identify which questions the student has attempted.
+Carefully examine the handwritten work in the image(s) above. Identify which questions the student has attempted.
 
 Return ONLY this JSON (no other text):
 {

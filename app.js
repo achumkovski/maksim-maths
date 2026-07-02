@@ -610,10 +610,10 @@ async function renderSubtopic(subtopicId) {
            </div>`
         : `<div class="alert alert-info mt-4">⏳ Analysing your work…</div>`
       : `<div class="upload-area mt-4" id="upload-area-${diff}" data-diff="${diff}">
-          <input type="file" id="file-${diff}" accept="image/*" capture="environment" />
+          <input type="file" id="file-${diff}" accept="image/*" multiple />
           <div class="upload-icon">📷</div>
-          <div class="upload-text">Upload photo of your working</div>
-          <div class="upload-sub">Tap to take a photo or choose a file</div>
+          <div class="upload-text">Upload photos of your working</div>
+          <div class="upload-sub">Tap to choose one or more photos</div>
           <div id="preview-${diff}" class="preview-wrap" style="display:none"></div>
         </div>
         <button class="btn btn-primary mt-4" id="submit-btn-${diff}" data-diff="${diff}" data-subtopic-id="${subtopicId}" style="display:none">
@@ -691,20 +691,20 @@ async function renderSubtopic(subtopicId) {
     uploadArea.onclick = () => fileInput.click();
 
     fileInput.onchange = () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      previewDiv.innerHTML = `<img src="${url}" alt="Your work" />`;
+      const files = Array.from(fileInput.files);
+      if (!files.length) return;
+      previewDiv.innerHTML = files.map(f => `<img src="${URL.createObjectURL(f)}" alt="Your work" />`).join('');
       previewDiv.style.display = 'block';
       submitBtn.style.display = 'inline-flex';
-      uploadArea.querySelector('.upload-text').textContent = 'Photo selected ✓';
+      uploadArea.querySelector('.upload-text').textContent =
+        files.length === 1 ? 'Photo selected ✓' : `${files.length} photos selected ✓`;
     };
 
     submitBtn?.addEventListener('click', async () => {
-      const file = fileInput.files[0];
-      if (!file) return;
+      const files = Array.from(fileInput.files);
+      if (!files.length) return;
       const questions = allQuestions.filter(q => q.difficulty === diff).sort((a, b) => a.order - b.order);
-      await submitWork(subtopicId, subtopic.name, diff, file, questions);
+      await submitWork(subtopicId, subtopic.name, diff, files, questions);
     });
   });
 
@@ -715,7 +715,7 @@ async function renderSubtopic(subtopicId) {
 }
 
 // ── Submit work ────────────────────────────────────────────────────────
-async function submitWork(subtopicId, subtopicName, difficulty, file, questions) {
+async function submitWork(subtopicId, subtopicName, difficulty, files, questions) {
   showLoading(
     'Analysing your work…',
     'Claude is reviewing your handwritten answers and working. This usually takes 10–20 seconds…'
@@ -724,7 +724,7 @@ async function submitWork(subtopicId, subtopicName, difficulty, file, questions)
   const apiKey = getApiKey();
   const submissionId = uid();
 
-  const photoBlob = file;
+  const photoBlob = Array.isArray(files) ? files[0] : files;
   const submission = {
     id: submissionId,
     subtopicId,
@@ -736,7 +736,7 @@ async function submitWork(subtopicId, subtopicName, difficulty, file, questions)
   await DB.save('submissions', submission);
 
   try {
-    const feedback = await CLAUDE.analysePhoto(file, questions, difficulty, subtopicName, apiKey);
+    const feedback = await CLAUDE.analysePhoto(files, questions, difficulty, subtopicName, apiKey);
 
     // Merge question details into feedback for display
     feedback.questionsWithData = (feedback.questions || []).map(fq => {
