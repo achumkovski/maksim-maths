@@ -22,6 +22,23 @@ async function blobToBase64(blob) {
   });
 }
 
+async function resizeImage(blob, maxDim = 1600, quality = 0.85) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(resolve, 'image/jpeg', quality);
+    };
+    img.src = url;
+  });
+}
+
 function extractJSON(text) {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in Claude response');
@@ -169,8 +186,9 @@ Notation: use ^ for powers (x^2), sqrt() for roots, unicode symbols ≤ ≥ ≠ 
 }
 
 async function analysePhoto(photoFile, questions, difficulty, subtopicName, apiKey) {
-  const base64 = await blobToBase64(photoFile);
-  const mediaType = photoFile.type || 'image/jpeg';
+  const resized = await resizeImage(photoFile);
+  const base64 = await blobToBase64(resized);
+  const mediaType = 'image/jpeg';
 
   const questionList = questions.map((q, i) => `Q${i + 1}: ${q.text}`).join('\n');
 
