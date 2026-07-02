@@ -82,5 +82,5 @@ if __name__ == '__main__':
     else:
         print(f'Gateway: {BASE_URL}')
         print(f'Token:   {len(TOKEN)} chars, extra headers: {list(EXTRA_HEADERS.keys())}')
-    print(f'Proxy running on http://localhost:{PORT}')
-    HTTPServer(('localhost', PORT), ProxyHandler).serve_forever()
+    print(f'Proxy running on http://0.0.0.0:{PORT}  (LAN-accessible)')
+    HTTPServer(('0.0.0.0', PORT), ProxyHandler).serve_forever()

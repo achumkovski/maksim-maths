@@ -1,2 +1,4 @@
 .proxy-config.json
 *.pdf
+data.json
+photos/

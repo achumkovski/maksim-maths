@@ -196,7 +196,12 @@ async function renderDashboard() {
       <div class="page-header">
         <div>
           <div class="page-title">Topics</div>
-          <div class="page-subtitle">Select a topic to study, or add a new one</div>
+          <div class="page-subtitle">
+            Select a topic to study, or add a new one
+            <span style="margin-left:8px;font-size:0.78rem;color:var(--muted)">
+              ${DB.sbEnabled() ? '☁️ Cloud sync' : '💾 Local only'}
+            </span>
+          </div>
         </div>
         <button class="btn btn-primary" id="add-topic-btn">+ Add Topic</button>
       </div>
@@ -1023,6 +1028,24 @@ async function init() {
       <div id="m-direct-section" style="display:${!isCorporate ? 'block' : 'none'}">
         <input class="form-input" type="password" id="m-direct-input" placeholder="sk-ant-..." />
       </div>
+
+      <div style="border-top:1px solid var(--border);margin:20px 0 16px"></div>
+      <div style="font-weight:700;margin-bottom:4px;font-size:0.9rem">☁️ Cloud Sync</div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-bottom:12px">
+        Connect Supabase so topics and questions sync across all devices — phone, tablet, anywhere.
+        <a href="https://supabase.com" target="_blank" style="color:var(--primary)">Create a free account →</a>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label" style="font-size:0.82rem">Project URL</label>
+        <input class="form-input" type="text" id="m-sb-url" placeholder="https://xxxx.supabase.co"
+          value="${localStorage.getItem('mm-supabase-url') || ''}" autocomplete="off" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label" style="font-size:0.82rem">Anon Key</label>
+        <input class="form-input" type="password" id="m-sb-key" placeholder="eyJ..."
+          value="${localStorage.getItem('mm-supabase-key') || ''}" autocomplete="off" />
+      </div>
+
       <div class="modal-actions" style="margin-top:16px">
         <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
         <button class="btn btn-primary" id="modal-confirm">Save</button>
@@ -1042,6 +1065,15 @@ async function init() {
     document.getElementById('modal-cancel').onclick = hideModal;
     document.getElementById('modal-confirm').onclick = () => {
       const corpVisible = document.getElementById('m-corp-section').style.display !== 'none';
+
+      // Save Supabase config (optional — both fields or neither)
+      const sbUrl = document.getElementById('m-sb-url').value.trim();
+      const sbKey = document.getElementById('m-sb-key').value.trim();
+      if (sbUrl) localStorage.setItem('mm-supabase-url', sbUrl);
+      else localStorage.removeItem('mm-supabase-url');
+      if (sbKey) localStorage.setItem('mm-supabase-key', sbKey);
+      else localStorage.removeItem('mm-supabase-key');
+
       if (corpVisible) {
         localStorage.setItem('mm-auth-mode', 'bedrock');
         setApiKey('proxy');
@@ -1062,6 +1094,8 @@ async function init() {
       hideModal();
     };
   };
+
+  await DB.init();  // pull from server if IndexedDB is empty (new device on LAN)
 
   const key = getApiKey();
   if (!key) {

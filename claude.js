@@ -1,7 +1,12 @@
 const DIRECT_API_URL = 'https://api.anthropic.com/v1/messages';
 const DIRECT_MODEL = 'claude-sonnet-4-6';
 
-const BEDROCK_PROXY_URL = 'http://localhost:8770';
+// When accessed from another device on the LAN (e.g. phone → desktop IP),
+// use that same hostname so the request reaches the desktop's proxy.
+const _proxyHost = window.location.hostname;
+const BEDROCK_PROXY_URL = (_proxyHost === 'localhost' || _proxyHost === '127.0.0.1' || _proxyHost === '')
+  ? 'http://localhost:8770'
+  : `http://${_proxyHost}:8770`;
 const BEDROCK_MODEL_ID = 'us.anthropic.claude-3-5-sonnet-20241022-v2:0';
 
 function getAuthMode() {
@@ -57,26 +62,46 @@ async function callDirectClaude(apiKey, messages, systemPrompt) {
 }
 
 async function callBedrockClaude(_token, messages, systemPrompt) {
-  const url = `${BEDROCK_PROXY_URL}/v1/messages`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: DIRECT_MODEL,
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || err.message || `Proxy error ${res.status} — is the maksim-maths-proxy server running?`);
+  // HTTPS pages (GitHub Pages) silently block HTTP proxy calls — fail fast.
+  if (window.location.protocol === 'https:') {
+    throw new Error(
+      'Salesforce proxy does not work on GitHub Pages (HTTPS blocks HTTP calls). ' +
+      'Access the app on your local network (http://192.168.x.x:8768) or switch to an Anthropic API key in Settings.'
+    );
   }
 
-  const data = await res.json();
-  return data.content[0].text;
+  const url = `${BEDROCK_PROXY_URL}/v1/messages`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: DIRECT_MODEL,
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || err.message || `Proxy error ${res.status} — is the maksim-maths-proxy server running?`);
+    }
+
+    const data = await res.json();
+    return data.content[0].text;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error('Proxy timed out — is maksim-maths-proxy running? Access the app at http://<desktop-ip>:8768 for Salesforce auth.');
+    }
+    throw err;
+  }
 }
 
 async function generateQuestions(topicName, subtopicName, apiKey) {
